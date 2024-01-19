@@ -74,8 +74,16 @@ func parseKill(currentGame *model.Game, line string) error {
 		return nil
 	}
 
-	killerID := matches[1]
-	victimID := matches[2]
+	killerID, err := strconv.Atoi(matches[1])
+	if err != nil {
+		return err
+	}
+
+	victimID, err := strconv.Atoi(matches[2])
+	if err != nil {
+		return err
+	}
+
 	killModeID, err := strconv.Atoi(matches[3])
 	if err != nil {
 		return err
@@ -86,11 +94,11 @@ func parseKill(currentGame *model.Game, line string) error {
 	}
 
 	for i, player := range currentGame.Players {
-		if killerID == utils.World && victimID == strconv.Itoa(player.ID) {
+		if killerID == utils.World && victimID == player.ID {
 			currentGame.Players[i].Kills -= 1
 			break
 		} else {
-			if killerID == strconv.Itoa(player.ID) {
+			if killerID == player.ID {
 				currentGame.Players[i].Kills += 1
 				break
 			}

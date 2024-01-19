@@ -12,7 +12,6 @@ func GetGameResult(game model.Game) (string, error) {
 	out.TotalKills = game.TotalKills
 
 	for _, player := range game.Players {
-
 		out.Players = append(out.Players, player.Name)
 		out.Kills[player.Name] = player.Kills
 	}
