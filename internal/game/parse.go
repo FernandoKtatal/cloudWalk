@@ -14,7 +14,7 @@ import (
 func ParseLogFile(filePath string) ([]model.Game, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
-		return nil, err
+		return nil, utils.FileNotFound
 	}
 	defer file.Close()
 
@@ -37,14 +37,10 @@ func ParseLogFile(filePath string) ([]model.Game, error) {
 		if strings.Contains(line, utils.PlayerData) {
 			player := parsePlayer(line)
 			if player != nil {
-				if isNewPlayer(player, currentGame.Players) {
+				if isNew, index := isNewPlayer(player, currentGame.Players); isNew {
 					currentGame.Players = append(currentGame.Players, *player)
 				} else {
-					for i, p := range currentGame.Players {
-						if p.ID == player.ID {
-							currentGame.Players[i].Name = player.Name
-						}
-					}
+					currentGame.Players[*index].Name = player.Name
 				}
 			}
 		}
@@ -52,8 +48,8 @@ func ParseLogFile(filePath string) ([]model.Game, error) {
 		// Get kill info
 		if strings.Contains(line, utils.Kill) {
 			err := parseKill(currentGame, line)
-			if err == nil {
-				currentGame.TotalKills++
+			if err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -65,13 +61,13 @@ func ParseLogFile(filePath string) ([]model.Game, error) {
 	return games, nil
 }
 
-// parseKill extract kills info
+// parseKill extract kills info and update game's object
 func parseKill(currentGame *model.Game, line string) error {
 	regex := regexp.MustCompile(`Kill:\s+(\d+)\s+(\d+)\s+(\d+): (.+?) killed (.+?) by (.+)`)
 	matches := regex.FindStringSubmatch(line)
 
 	if len(matches) == 0 {
-		return nil
+		return utils.ParseKillLine
 	}
 
 	killerID, err := strconv.Atoi(matches[1])
@@ -89,20 +85,28 @@ func parseKill(currentGame *model.Game, line string) error {
 		return err
 	}
 
-	if mode, ok := utils.KillMode[killModeID]; ok {
-		currentGame.KillsByMeans[mode]++
-	}
-
+	found := false
 	for i, player := range currentGame.Players {
 		if killerID == utils.World && victimID == player.ID {
 			currentGame.Players[i].Kills -= 1
+			found = true
 			break
 		} else {
 			if killerID == player.ID {
 				currentGame.Players[i].Kills += 1
+				found = true
 				break
 			}
 		}
+	}
+
+	if !found {
+		return utils.PlayerNotFound
+	}
+
+	if mode, ok := utils.KillMode[killModeID]; ok {
+		currentGame.KillsByMeans[mode]++
+		currentGame.TotalKills++
 	}
 
 	return nil
@@ -117,7 +121,11 @@ func parsePlayer(line string) *model.Player {
 		return nil
 	}
 
-	playerID, _ := strconv.Atoi(matches[1])
+	playerID, err := strconv.Atoi(matches[1])
+	if err != nil {
+		return nil
+	}
+
 	playerName := matches[2]
 
 	return &model.Player{
@@ -126,12 +134,12 @@ func parsePlayer(line string) *model.Player {
 	}
 }
 
-// isNewPlayer check if it's new player or just updating info
-func isNewPlayer(newPlayer *model.Player, players []model.Player) bool {
-	for _, player := range players {
+// isNewPlayer check if it's a new player if not returns its index
+func isNewPlayer(newPlayer *model.Player, players []model.Player) (bool, *int) {
+	for i, player := range players {
 		if player.ID == newPlayer.ID {
-			return false
+			return false, &i
 		}
 	}
-	return true
+	return true, nil
 }
